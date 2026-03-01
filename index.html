@@ -9,9 +9,9 @@
             --bg: #1a1a2e;
             --card-back: #16213e;
             --red: #e94560;
-            --green: #0f3460; /* Hidden state */
             --green-active: #4ecca3;
             --text: #ffffff;
+            --overlay: rgba(0, 0, 0, 0.85);
         }
 
         body {
@@ -23,17 +23,38 @@
             align-items: center;
             margin: 0;
             padding: 20px;
+            min-height: 100vh;
         }
 
-        h1 { margin-bottom: 10px; }
+        /* --- New How-To Modal Styles --- */
+        #how-to-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--overlay);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: #0f3460;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 450px;
+            text-align: center;
+            border: 2px solid var(--green-active);
+            box-shadow: 0 0 20px rgba(78, 204, 163, 0.3);
+        }
+
+        .modal-content h2 { color: var(--green-active); margin-top: 0; }
+        .modal-content ul { text-align: left; line-height: 1.6; margin: 20px 0; }
+        .modal-content li { margin-bottom: 10px; }
+
+        /* --- Original Game Styles --- */
         #status-bar { margin-bottom: 20px; text-align: center; }
-
-        #timer {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--red);
-        }
-
+        #timer { font-size: 2.5rem; font-weight: bold; color: var(--red); margin: 10px 0; }
+        
         .grid {
             display: grid;
             grid-template-columns: repeat(6, 50px);
@@ -49,7 +70,6 @@
             height: 50px;
             background-color: var(--card-back);
             border-radius: 4px;
-            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -57,162 +77,171 @@
             border: 2px solid rgba(255,255,255,0.1);
         }
 
-        /* State Classes */
         .card.reveal-red { background-color: var(--red); }
         .card.reveal-green { background-color: var(--green-active); border-color: white; }
-        .card.hidden { cursor: pointer; }
-        .card.disabled { cursor: not-allowed; opacity: 0.6; }
+        .card.active-row { border: 2px solid var(--green-active); cursor: pointer; }
 
-        .controls { margin-top: 20px; }
+        .controls { margin-top: 25px; }
         button {
-            padding: 10px 25px;
-            font-size: 1rem;
+            padding: 12px 30px;
+            font-size: 1.1rem;
             cursor: pointer;
             background: var(--green-active);
             border: none;
             border-radius: 5px;
             color: var(--bg);
             font-weight: bold;
+            transition: opacity 0.2s;
         }
-
-        .row-label {
-            color: rgba(255,255,255,0.5);
-            font-size: 0.8rem;
-            grid-column: span 6;
-            margin-top: 5px;
-            border-top: 1px solid rgba(255,255,255,0.1);
-        }
+        button:hover { opacity: 0.9; }
     </style>
 </head>
 <body>
 
-<h1>Memory Grid 6x20</h1>
+    <div id="how-to-modal">
+        <div class="modal-content">
+            <h2>How to Play</h2>
+            <ul>
+                <li><strong>Phase 1: Memorize.</strong> You have 60 seconds to study a 6x20 grid where each row has exactly 1 green card.</li>
+                <li><strong>Phase 2: The Climb.</strong> The grid turns face-down. Start at the bottom (Row 1) and click the green card.</li>
+                <li><strong>The Catch:</strong> One wrong move and the game is over. See how many rows you can clear!</li>
+            </ul>
+            <button onclick="closeModal()">Got it!</button>
+        </div>
+    </div>
 
-<div id="status-bar">
-    <div id="instruction">Click "Start" to see the Key Map for 60 seconds!</div>
-    <div id="timer">--</div>
-</div>
+    <h1>Memory Grid 6x20</h1>
+    
+    <div id="status-bar">
+        <div id="instruction">Ready to test your memory?</div>
+        <div id="timer">--</div>
+    </div>
 
-<div class="grid" id="grid"></div>
+    <div class="grid" id="grid"></div>
 
-<div class="controls">
-    <button id="start-btn" onclick="startMemorizePhase()">Start Game</button>
-</div>
+    <div class="controls">
+        <button id="start-btn" onclick="startMemorizePhase()">Start Memorizing</button>
+    </div>
 
-<script>
-    const gridElement = document.getElementById('grid');
-    const timerElement = document.getElementById('timer');
-    const instruction = document.getElementById('instruction');
-    const startBtn = document.getElementById('start-btn');
+    <script>
+        const gridElement = document.getElementById('grid');
+        const timerElement = document.getElementById('timer');
+        const instruction = document.getElementById('instruction');
+        const startBtn = document.getElementById('start-btn');
+        const modal = document.getElementById('how-to-modal');
+        
+        const ROWS = 20;
+        const COLS = 6;
+        let gameState = 'waiting';
+        let currentRow = 0;
+        let answerKey = [];
 
-    const ROWS = 20;
-    const COLS = 6;
-    let gameState = 'waiting'; // waiting, memorizing, playing, over
-    let currentRow = 0;
-    let answerKey = []; // Stores the index of the green card for each row
-
-    // Initialize empty grid visually
-    function initGrid() {
-        gridElement.innerHTML = '';
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                const card = document.createElement('div');
-                card.classList.add('card');
-                card.id = `card-${r}-${c}`;
-                gridElement.appendChild(card);
-            }
-        }
-    }
-
-    function startMemorizePhase() {
-        gameState = 'memorizing';
-        currentRow = 0;
-        answerKey = [];
-        startBtn.style.display = 'none';
-        instruction.innerText = "MEMORIZE THE GREENS!";
-
-        // Generate Random Answers
-        for (let r = 0; r < ROWS; r++) {
-            answerKey.push(Math.floor(Math.random() * COLS));
+        function closeModal() {
+            modal.style.display = 'none';
         }
 
-        // Show all cards
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                const card = document.getElementById(`card-${r}-${c}`);
-                if (c === answerKey[r]) {
-                    card.classList.add('reveal-green');
-                } else {
-                    card.classList.add('reveal-red');
+        function initGrid() {
+            gridElement.innerHTML = '';
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const card = document.createElement('div');
+                    card.classList.add('card');
+                    card.id = `card-${r}-${c}`;
+                    gridElement.appendChild(card);
                 }
             }
         }
 
-        // 60 Second Timer
-        let timeLeft = 60;
-        timerElement.innerText = timeLeft;
-        const countdown = setInterval(() => {
-            timeLeft--;
+        function startMemorizePhase() {
+            gameState = 'memorizing';
+            currentRow = 0;
+            answerKey = [];
+            startBtn.style.display = 'none';
+            instruction.innerText = "Study the positions now!";
+            
+            for (let r = 0; r < ROWS; r++) {
+                answerKey.push(Math.floor(Math.random() * COLS));
+            }
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const card = document.getElementById(`card-${r}-${c}`);
+                    if (c === answerKey[r]) {
+                        card.classList.add('reveal-green');
+                    } else {
+                        card.classList.add('reveal-red');
+                    }
+                }
+            }
+
+            let timeLeft = 60;
             timerElement.innerText = timeLeft;
-            if (timeLeft <= 0) {
-                clearInterval(countdown);
-                startPlayPhase();
+            const countdown = setInterval(() => {
+                timeLeft--;
+                timerElement.innerText = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    if(gameState === 'memorizing') startPlayPhase();
+                }
+            }, 1000);
+        }
+
+        function startPlayPhase() {
+            gameState = 'playing';
+            instruction.innerText = "Find the green in Row 1!";
+            timerElement.innerText = "GO!";
+            
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.remove('reveal-green', 'reveal-red');
+                card.onclick = (e) => handleCardClick(e);
+            });
+            updateRowHighlights();
+        }
+
+        function updateRowHighlights() {
+            document.querySelectorAll('.card').forEach(card => card.classList.remove('active-row'));
+            for(let c=0; c<COLS; c++) {
+                const card = document.getElementById(`card-${currentRow}-${c}`);
+                if(card) card.classList.add('active-row');
             }
-        }, 1000);
-    }
-
-    function startPlayPhase() {
-        gameState = 'playing';
-        instruction.innerText = "Start from Row 1! Find the greens.";
-        timerElement.innerText = "GO!";
-
-        // Hide all cards
-        document.querySelectorAll('.card').forEach(card => {
-            card.classList.remove('reveal-green', 'reveal-red');
-            card.onclick = (e) => handleCardClick(e);
-        });
-    }
-
-    function handleCardClick(e) {
-        if (gameState !== 'playing') return;
-
-        const idParts = e.target.id.split('-');
-        const r = parseInt(idParts[1]);
-        const c = parseInt(idParts[2]);
-
-        // Ensure player plays row by row
-        if (r !== currentRow) {
-            alert(`Please select a card in Row ${currentRow + 1}`);
-            return;
         }
 
-        if (c === answerKey[r]) {
-            // Correct
-            e.target.classList.add('reveal-green');
-            currentRow++;
-            if (currentRow === ROWS) {
-                endGame(true);
+        function handleCardClick(e) {
+            if (gameState !== 'playing') return;
+
+            const [_, r, c] = e.target.id.split('-').map(Number);
+
+            if (r !== currentRow) return;
+
+            if (c === answerKey[r]) {
+                e.target.classList.add('reveal-green');
+                currentRow++;
+                if (currentRow === ROWS) {
+                    endGame(true);
+                } else {
+                    instruction.innerText = `Correct! Row ${currentRow + 1} next.`;
+                    updateRowHighlights();
+                }
+            } else {
+                e.target.classList.add('reveal-red');
+                endGame(false);
             }
-        } else {
-            // Wrong
-            e.target.classList.add('reveal-red');
-            endGame(false);
         }
-    }
 
-    function endGame(win) {
-        gameState = 'over';
-        if (win) {
-            instruction.innerText = "PERFECT! You remembered all 20!";
-        } else {
-            instruction.innerText = `Game Over! Score: ${currentRow} rows.`;
+        function endGame(win) {
+            gameState = 'over';
+            instruction.innerText = win ? "FLAWLESS VICTORY!" : `Game Over! Score: ${currentRow}/20`;
+            startBtn.innerText = "Play Again";
+            startBtn.style.display = 'block';
+            startBtn.onclick = () => location.reload();
+            
+            // Reveal all greens at the end so they can see what they missed
+            for (let r = 0; r < ROWS; r++) {
+                document.getElementById(`card-${r}-${answerKey[r]}`).classList.add('reveal-green');
+            }
         }
-        startBtn.innerText = "Try Again";
-        startBtn.style.display = 'block';
-        startBtn.onclick = () => location.reload();
-    }
 
-    initGrid();
-</script>
+        initGrid();
+    </script>
 </body>
 </html>
