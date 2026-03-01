@@ -11,7 +11,7 @@
             --red: #e94560;
             --green-active: #4ecca3;
             --text: #ffffff;
-            --overlay: rgba(0, 0, 0, 0.85);
+            --overlay: rgba(0, 0, 0, 0.9);
         }
 
         body {
@@ -26,8 +26,8 @@
             min-height: 100vh;
         }
 
-        /* --- How-To Modal Styles --- */
-        #how-to-modal {
+        /* --- Difficulty Selection Styles --- */
+        #difficulty-modal {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: var(--overlay);
@@ -41,15 +41,30 @@
             background: #0f3460;
             padding: 30px;
             border-radius: 15px;
-            max-width: 450px;
+            max-width: 400px;
             text-align: center;
             border: 2px solid var(--green-active);
-            box-shadow: 0 0 20px rgba(78, 204, 163, 0.3);
         }
 
-        .modal-content h2 { color: var(--green-active); margin-top: 0; }
-        .modal-content ul { text-align: left; line-height: 1.6; margin: 20px 0; }
-        .modal-content li { margin-bottom: 10px; }
+        .diff-btn {
+            display: block;
+            width: 100%;
+            margin: 12px 0;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: transform 0.2s;
+            text-align: center;
+        }
+
+        .diff-btn small { display: block; font-weight: normal; font-size: 0.8rem; opacity: 0.8; }
+        .diff-btn:hover { transform: scale(1.05); }
+        .easy { background: #4ecca3; color: #1a1a2e; }
+        .medium { background: #fca311; color: #1a1a2e; }
+        .hard { background: #e94560; color: #ffffff; }
 
         /* --- Game Styles --- */
         #status-bar { margin-bottom: 20px; text-align: center; }
@@ -57,7 +72,6 @@
         
         .grid {
             display: grid;
-            grid-template-columns: repeat(6, 45px); /* Slightly smaller to fit mobile screens better */
             gap: 8px;
             background: #0f3460;
             padding: 15px;
@@ -82,7 +96,7 @@
         .card.active-row { border: 2px solid var(--green-active); cursor: pointer; }
 
         .controls { margin-top: 25px; margin-bottom: 40px; }
-        button {
+        #start-btn {
             padding: 12px 30px;
             font-size: 1.1rem;
             cursor: pointer;
@@ -91,50 +105,50 @@
             border-radius: 5px;
             color: var(--bg);
             font-weight: bold;
-            transition: opacity 0.2s;
         }
-        button:hover { opacity: 0.9; }
 
-        /* --- Footer Styles (Maharram Guluzade) --- */
         footer {
             margin-top: auto;
             padding: 20px;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             color: rgba(255, 255, 255, 0.3);
             letter-spacing: 1px;
             text-transform: uppercase;
         }
-        footer span {
-            color: var(--green-active);
-            opacity: 0.6;
-        }
+        footer span { color: var(--green-active); opacity: 0.6; }
     </style>
 </head>
 <body>
 
-    <div id="how-to-modal">
+    <div id="difficulty-modal">
         <div class="modal-content">
-            <h2>How to Play</h2>
-            <ul>
-                <li><strong>Phase 1: Memorize.</strong> You have 60 seconds to study the 6x20 grid. Each row has 1 green card.</li>
-                <li><strong>Phase 2: The Climb.</strong> The grid turns face-down. Start at Row 1 and find the greens.</li>
-                <li><strong>One Shot:</strong> A single mistake ends the game. Score as high as you can!</li>
-            </ul>
-            <button onclick="closeModal()">Got it!</button>
+            <h2>Select Difficulty</h2>
+            <button class="diff-btn easy" onclick="setDifficulty('easy')">
+                EASY
+                <small>3x5 Grid | 15s Study Time</small>
+            </button>
+            <button class="diff-btn medium" onclick="setDifficulty('medium')">
+                MEDIUM
+                <small>4x10 Grid | 30s Study Time</small>
+            </button>
+            <button class="diff-btn hard" onclick="setDifficulty('hard')">
+                HARD (Extreme)
+                <small>6x20 Grid | 60s Study Time</small>
+            </button>
         </div>
     </div>
 
-    <h1>Memory Grid 6x20</h1>
+    <h1>Memory Grid</h1>
     
     <div id="status-bar">
-        <div id="instruction">Ready to test your memory?</div>
+        <div id="instruction">Select a difficulty to begin...</div>
         <div id="timer">--</div>
     </div>
 
     <div class="grid" id="grid"></div>
 
     <div class="controls">
-        <button id="start-btn" onclick="startMemorizePhase()">Start Memorizing</button>
+        <button id="start-btn" style="display:none;" onclick="startMemorizePhase()">Start Memorizing</button>
     </div>
 
     <footer>
@@ -146,15 +160,28 @@
         const timerElement = document.getElementById('timer');
         const instruction = document.getElementById('instruction');
         const startBtn = document.getElementById('start-btn');
-        const modal = document.getElementById('how-to-modal');
+        const diffModal = document.getElementById('difficulty-modal');
         
-        const ROWS = 20;
-        const COLS = 6;
+        let ROWS, COLS, MEMORY_TIME;
         let gameState = 'waiting';
         let currentRow = 0;
         let answerKey = [];
 
-        function closeModal() { modal.style.display = 'none'; }
+        function setDifficulty(level) {
+            if(level === 'easy') { 
+                ROWS = 5; COLS = 3; MEMORY_TIME = 15; 
+            } else if(level === 'medium') { 
+                ROWS = 10; COLS = 4; MEMORY_TIME = 30; 
+            } else { 
+                ROWS = 20; COLS = 6; MEMORY_TIME = 60; 
+            }
+
+            diffModal.style.display = 'none';
+            startBtn.style.display = 'block';
+            gridElement.style.gridTemplateColumns = `repeat(${COLS}, 45px)`;
+            instruction.innerText = `${level.toUpperCase()} Mode: Study the grid for ${MEMORY_TIME}s.`;
+            initGrid();
+        }
 
         function initGrid() {
             gridElement.innerHTML = '';
@@ -173,7 +200,7 @@
             currentRow = 0;
             answerKey = [];
             startBtn.style.display = 'none';
-            instruction.innerText = "Study the positions now!";
+            instruction.innerText = "Study the positions!";
             
             for (let r = 0; r < ROWS; r++) {
                 answerKey.push(Math.floor(Math.random() * COLS));
@@ -182,15 +209,12 @@
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
                     const card = document.getElementById(`card-${r}-${c}`);
-                    if (c === answerKey[r]) {
-                        card.classList.add('reveal-green');
-                    } else {
-                        card.classList.add('reveal-red');
-                    }
+                    if (c === answerKey[r]) card.classList.add('reveal-green');
+                    else card.classList.add('reveal-red');
                 }
             }
 
-            let timeLeft = 60;
+            let timeLeft = MEMORY_TIME;
             timerElement.innerText = timeLeft;
             const countdown = setInterval(() => {
                 timeLeft--;
@@ -206,7 +230,6 @@
             gameState = 'playing';
             instruction.innerText = "Find the green in Row 1!";
             timerElement.innerText = "GO!";
-            
             document.querySelectorAll('.card').forEach(card => {
                 card.classList.remove('reveal-green', 'reveal-red');
                 card.onclick = (e) => handleCardClick(e);
@@ -230,10 +253,9 @@
             if (c === answerKey[r]) {
                 e.target.classList.add('reveal-green');
                 currentRow++;
-                if (currentRow === ROWS) {
-                    endGame(true);
-                } else {
-                    instruction.innerText = `Correct! Row ${currentRow + 1} next.`;
+                if (currentRow === ROWS) endGame(true);
+                else {
+                    instruction.innerText = `Row ${currentRow + 1} next.`;
                     updateRowHighlights();
                 }
             } else {
@@ -244,17 +266,14 @@
 
         function endGame(win) {
             gameState = 'over';
-            instruction.innerText = win ? "FLAWLESS VICTORY!" : `Score: ${currentRow}/20`;
-            startBtn.innerText = "Play Again";
+            instruction.innerText = win ? "VICTORY!" : `Score: ${currentRow}/${ROWS}`;
+            startBtn.innerText = "Back to Menu";
             startBtn.style.display = 'block';
             startBtn.onclick = () => location.reload();
-            
             for (let r = 0; r < ROWS; r++) {
                 document.getElementById(`card-${r}-${answerKey[r]}`).classList.add('reveal-green');
             }
         }
-
-        initGrid();
     </script>
 </body>
 </html>
